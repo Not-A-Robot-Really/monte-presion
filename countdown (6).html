@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>COUNTDOWN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="scanlines"></div>
+<audio id="bgm-audio" src="game-theme.mp3" loop preload="auto"></audio>
+<div id="chat-toggle-btn" title="Toggle messages">
+  <span class="chat-badge hidden" id="chat-badge">0</span>
+</div>
+<div id="log"></div>
+<div id="topbar">
+  <div id="topbar-progress"></div>
+  <div class="topbar-col"><div id="roundlabel" class="pf">Round 1</div></div>
+  <div id="topbar-divider"></div>
+  <div class="topbar-col"><div id="countnum">13</div></div>
+</div>
+
+<div id="app">
+  <div id="stage">
+    <div class="seat" id="seat-top"></div>
+    <div class="seat" id="seat-left"></div>
+    <div class="seat" id="seat-right"></div>
+    <div class="seat" id="seat-bottom"></div>
+
+    <div id="centerpiece">
+      <div id="stopwatch-center" title="Call the bluff"></div>
+    </div>
+  </div>
+</div>
+
+<div id="btn-settings" title="Settings"></div>
+
+<div id="handbar">
+  <div id="hand-label" class="pf">YOUR HAND</div>
+  <div id="hand"></div>
+  <div id="action-hint"></div>
+  <div id="hand-controls"></div>
+</div>
+
+<div class="overlay hidden" id="settings-overlay">
+  <div class="settings-panel">
+    <div class="settings-title">SETTINGS</div>
+    <div class="settings-row">
+      <span class="settings-label">Sound Effects</span>
+      <label class="switch">
+        <input type="checkbox" id="sfx-toggle">
+        <span class="switch-track"></span>
+      </label>
+    </div>
+    <div class="settings-row">
+      <span class="settings-label">Volume</span>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <input type="range" id="vol-slider" min="0" max="100" value="60">
+        <span id="vol-value" class="pf">60%</span>
+      </div>
+    </div>
+    <button class="cta settings-close" id="btn-settings-close">CLOSE</button>
+  </div>
+</div>
+
+<div id="target-picker" class="hidden">
+  <div class="picker-box">
+    <div class="pf-label">CHOOSE TARGET</div>
+    <div id="target-list" style="display:flex;gap:12px;"></div>
+    <div class="target-opt" id="cancel-hammer" style="border-color:#555;color:#999;">CANCEL</div>
+  </div>
+</div>
+
+<div id="intermission">
+  <div class="interm-panel">
+    <div id="interm-title" class="pf">Round Complete</div>
+    <div id="interm-recap"></div>
+    <div id="interm-count"></div>
+    <div id="interm-sub"></div>
+    <div id="interm-hand"></div>
+  </div>
+</div>
+
+<div class="overlay" id="start-overlay">
+  <div class="title-big">COUNTDOWN</div>
+  <div class="subtitle">4 players, 1 deck, 1 countdown: 13 &rarr; 1. Play a card that matches the number &mdash; or bluff. Catch a liar, or get burned trying.</div>
+  <div class="rules">
+    <ul>
+      <li><b>Count it down.</b> Each number flashes a PLACE window. Drop one card claiming it matches (A=1 ... J=11, Q=12, K=13, Joker=anything), or pass.</li>
+      <li><b>Call the bluff.</b> Hit the button to accuse a rival &mdash; their top card flips face up. Bluffing? They lose a life. Honest? You do instead.</li>
+      <li><b>Play it safe.</b> Instead of placing a card, you can pull one back off your own pile &mdash; it counts as your move for that number, but shrinks your pile and clears the suspicion on it.</li>
+      <li><b>Hit zero.</b> Nobody caught, nobody accused &mdash; whoever's placed the fewest cards pays a life.</li>
+      <li><b>Play cold.</b> Sneak a 3-of-a-kind or run all 4 suits without getting caught, and start next round with a bonus life.</li>
+      <li>2 lives each. Windows get faster every round. Last one standing wins.</li>
+    </ul>
+  </div>
+  <button class="cta" id="btn-start">SIT DOWN</button>
+</div>
+
+<div class="overlay hidden" id="end-overlay">
+  <div class="title-big" id="end-title">TABLE CLOSED</div>
+  <div class="subtitle" id="end-sub"></div>
+  <button class="cta" id="btn-again">DEAL AGAIN</button>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+// ---------- Settings (SFX on/off + volume) ----------
+let settings = { sfxOn:true, volume:0.6 };
+(function loadSettings(){
+  try{
+    const saved = JSON.parse(localStorage.getItem('countdown-settings'));
+    if(saved && typeof saved==='object'){ settings = Object.assign(settings, saved); }
+  } catch(e){ /* ignore */ }
+})();
+function saveSettings(){
+  try{ localStorage.setItem('countdown-settings', JSON.stringify(settings)); } catch(e){ /* ignore */ }
+}
+
+// ---------- Audio: 8-bit SFX + background music (game-theme.mp3) ----------
+let audioCtx = null;
+function getAudioCtx(){
+  if(!audioCtx){ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }
+  if(audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function playTone(freq, opts){
+  if(!settings.sfxOn || settings.volume<=0) return;
+  opts = opts || {};
+  try{
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = opts.type || 'square';
+    osc.frequency.value = freq || 440;
+    const dur = opts.dur || 0.09;
+    const peak = (opts.peak!==undefined? opts.peak : 0.08) * settings.volume;
+    const start = ctx.currentTime + (opts.delay||0);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(Math.max(peak,0.0001), start + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(start);
+    osc.stop(start + dur + 0.02);
+  } catch(e){ /* audio unsupported, ignore */ }
+}
+// kept for any legacy calls
+function playClick(freq){ playTone(freq, {type:'square', dur:0.09, peak:0.08}); }
+
+const bgmAudio = document.getElementById('bgm-audio');
+function startBgm(){
+  getAudioCtx();
+  bgmAudio.volume = settings.volume;
+  if(settings.sfxOn){
+    bgmAudio.play().catch(()=>{ /* browser blocked autoplay; will retry on next user gesture */ });
+  }
+}
+
+function playCardSound(){ playTone(520, {type:'square', dur:0.08, peak:0.09}); }
+function playPassSound(){ playTone(240, {type:'triangle', dur:0.12, peak:0.06}); }
+function playRetrieveSound(){ playTone(380, {type:'triangle', dur:0.1, peak:0.07}); playTone(460, {type:'triangle', dur:0.1, peak:0.06, delay:0.05}); }
+function playAccuseSound(){ playTone(720, {type:'sawtooth', dur:0.09, peak:0.09}); playTone(480, {type:'sawtooth', dur:0.12, peak:0.08, delay:0.09}); }
+function playConfirmSound(){ playTone(700, {type:'square', dur:0.07, peak:0.07}); }
+function playCancelSound(){ playTone(220, {type:'square', dur:0.09, peak:0.06}); }
+function playCorrectSound(){ playTone(660, {type:'square', dur:0.09, peak:0.08}); playTone(880, {type:'square', dur:0.14, peak:0.08, delay:0.09}); }
+function playBluffCaughtSound(){ playTone(320, {type:'sawtooth', dur:0.1, peak:0.09}); playTone(180, {type:'sawtooth', dur:0.2, peak:0.09, delay:0.1}); }
+function playLifeLostSound(){ playTone(150, {type:'square', dur:0.22, peak:0.09}); }
+function playBonusLifeSound(){ playTone(660, {type:'triangle', dur:0.08, peak:0.07}); playTone(880, {type:'triangle', dur:0.08, peak:0.07, delay:0.08}); playTone(1100, {type:'triangle', dur:0.14, peak:0.07, delay:0.16}); }
+function playRoundStartSound(){ playTone(440, {type:'square', dur:0.1, peak:0.06}); }
+function playDealSound(){ playTone(300, {type:'square', dur:0.04, peak:0.04}); }
+function playGameOverSound(){ playTone(523, {type:'square', dur:0.12, peak:0.09}); playTone(659, {type:'square', dur:0.12, peak:0.09, delay:0.12}); playTone(784, {type:'square', dur:0.24, peak:0.09, delay:0.24}); }
+function playTickSound(){ playTone(880, {type:'square', dur:0.03, peak:0.035}); }
+function playWhooshSound(){ playTone(220, {type:'sawtooth', dur:0.16, peak:0.045}); }
+function playEliminationSound(){ playTone(400, {type:'sawtooth', dur:0.14, peak:0.09}); playTone(300, {type:'sawtooth', dur:0.14, peak:0.09, delay:0.14}); playTone(190, {type:'sawtooth', dur:0.3, peak:0.09, delay:0.28}); }
+function playUIClickSound(){ playTone(500, {type:'square', dur:0.05, peak:0.05}); }
+function playHoverSound(){ playTone(950, {type:'square', dur:0.02, peak:0.02}); }
+
+const SUITS = ["\u2660","\u2665","\u2666","\u2663"];
+const RED_SUITS = ["\u2665","\u2666"];
+const RANK_NAMES = {1:"A",11:"J",12:"Q",13:"K"};
+function rankLabel(r){ return RANK_NAMES[r] || String(r); }
+
+const PLAYER_NAMES = ["You","Jimmy","Gus","Juan"];
+const START_NUM = 13;
+
+let players;
+let round;
+let countdown;
+let phase = 'idle'; // 'place' | 'gap'
+let roundActive = false;
+let accusationInProgress = false;
+let roundOver = false;
+let phaseTimer = null;
+let placeDuration, gapDuration;
+let deck = [];
+
+let chatOpen = false;
+let chatUnread = 0;
+function log(msg){
+  const el = document.getElementById('log');
+  const d = document.createElement('div');
+  d.textContent = msg;
+  el.prepend(d);
+  while(el.children.length > 8) el.removeChild(el.lastChild);
+  if(!chatOpen){
+    chatUnread++;
+    const badge = document.getElementById('chat-badge');
+    badge.textContent = chatUnread > 9 ? '9+' : String(chatUnread);
+    badge.classList.remove('hidden');
+  }
+}
+
+function makeDeck(){
+  const d = [];
+  for(const s of SUITS){ for(let r=1;r<=13;r++){ d.push({suit:s, rank:r, joker:false}); } }
+  d.push({suit:null, rank:0, joker:true});
+  d.push({suit:null, rank:0, joker:true});
+  return d;
+}
+function shuffle(arr){
+  for(let i=arr.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [arr[i],arr[j]] = [arr[j],arr[i]]; }
+  return arr;
+}
+function cardColor(c){ if(c.joker) return 'joker'; return RED_SUITS.includes(c.suit) ? 'red' : 'black'; }
+function cardText(c){ if(c.joker) return 'JOKER'; return rankLabel(c.rank); }
+
+function durationsForRound(r){
+  placeDuration = Math.max(1.8, 3.2 - (r-1)*0.15);
+  gapDuration = Math.max(1.2, 2.1 - (r-1)*0.08);
+}
+
+function newGame(){
+  players = PLAYER_NAMES.map((n,i)=>({
+    id:i, name:n, isBot: i!==0, lives:2, hand:[], pile:[],
+    eliminated:false, bonusLifeQueued:false, claimHistory:[],
+    trust:{} // bot-only: suspicion tracking of other players, keyed by id
+  }));
+  players.forEach(p=>{ players.forEach(o=>{ if(o.id!==p.id) p.trust[o.id]=0.3; }); });
+  round = 0;
+  document.getElementById('start-overlay').classList.add('hidden');
+  document.getElementById('end-overlay').classList.add('hidden');
+  dealHands();
+  runIntermission(null, ()=>startRound());
+}
+
+const MAX_HAND_SIZE = 14;
+function dealHands(){
+  deck = shuffle(makeDeck());
+  const active = players.filter(p=>!p.eliminated);
+  let i=0;
+  players.forEach(p=>p.hand=[]);
+  while(deck.length){
+    const p = active[i % active.length];
+    if(p.hand.length < MAX_HAND_SIZE) p.hand.push(deck.pop());
+    i++;
+    // if every active player is capped, stop dealing (remaining cards stay out of play)
+    if(active.every(pl=>pl.hand.length >= MAX_HAND_SIZE)) break;
+  }
+  players.forEach(p=>{ p.pile=[]; p.claimHistory=[]; });
+}
+
+function startRound(){
+  round++;
+  roundOver = false;
+  accusationInProgress = false;
+  roundActive = true;
+  countdown = START_NUM;
+  durationsForRound(round);
+
+  players.forEach(p=>{
+    if(p.bonusLifeQueued && !p.eliminated){
+      p.lives += 1;
+      playBonusLifeSound();
+      log(`${p.name} earned a bonus life for nerves of steel.`);
+      p.bonusLifeQueued = false;
+    }
+  });
+
+  playRoundStartSound();
+  document.getElementById('roundlabel').textContent = `Round ${round}`;
+  renderAll();
+  log(`-- Round ${round} begins. --`);
+  enterPlacePhase();
+}
+
+function enterPlacePhase(){
+  if(roundOver) return;
+  phase = 'place';
+  botsActForCurrentNumber();
+  updatePhaseUI();
+  renderAll();
+  runTopbarProgress(placeDuration);
+  phaseTimer = setTimeout(()=>{
+    if(roundOver || accusationInProgress) return;
+    enterGapPhase();
+  }, placeDuration*1000);
+}
+
+function enterGapPhase(){
+  if(roundOver) return;
+  phase = 'gap';
+  updatePhaseUI();
+  renderAll();
+  botsMaybeAccuse();
+  runTopbarProgress(gapDuration);
+  phaseTimer = setTimeout(()=>{
+    if(roundOver || accusationInProgress) return;
+    countdown--;
+    if(countdown <= 0){
+      roundActive = false;
+      resolveTimeout();
+    } else {
+      enterPlacePhase();
+    }
+  }, gapDuration*1000);
+}
+
+function runTopbarProgress(durationSec){
+  const bar = document.getElementById('topbar-progress');
+  bar.style.transition = 'none';
+  bar.style.width = '0%';
+  void bar.offsetWidth; // force reflow so the next transition actually animates
+  bar.style.transition = `width ${durationSec}s linear`;
+  bar.style.width = '100%';
+}
+
+function updatePhaseUI(){
+  const numEl = document.getElementById('countnum');
+  numEl.textContent = countdown;
+  if(phase==='place'){
+    playTickSound();
+    numEl.classList.remove('wait-state');
+    numEl.classList.remove('tick'); void numEl.offsetWidth; numEl.classList.add('tick');
+  } else {
+    playWhooshSound();
+    numEl.classList.add('wait-state');
+  }
+}
+
+// ---------- Smarter bot AI ----------
+// Each bot tracks a rough "trust" score per opponent (0=very suspicious, 1=very trustworthy),
+// updated by observed behavior (streaks of the same claim pattern, pile-growth pace, retrievals).
+
+function updateTrustSignals(){
+  // bots peek at pace: anyone way ahead of the average pile size for this point in the round looks suspicious
+  const activeIds = players.filter(p=>!p.eliminated).map(p=>p.id);
+  const acts = START_NUM-countdown+1;
+  players.forEach(bot=>{
+    if(!bot.isBot || bot.eliminated) return;
+    players.forEach(other=>{
+      if(other.id===bot.id || other.eliminated) return;
+      const expected = acts * 0.65; // rough expected pile size if playing straight
+      const diff = other.pile.length - expected;
+      let delta = 0;
+      if(diff > 1.5) delta = -0.03; // suspiciously fast placer
+      else if(diff < -1.5) delta = 0.02; // cautious, more likely honest/passing
+      bot.trust[other.id] = clamp01((bot.trust[other.id]!==undefined?bot.trust[other.id]:0.3) + delta);
+    });
+  });
+}
+function clamp01(x){ return Math.max(0, Math.min(1,x)); }
+
+function decideBotMove(p, num){
+  updateTrustSignals();
+  const matchIdx = p.hand.findIndex(c=>!c.joker && c.rank===num);
+  const jokerIdx = p.hand.findIndex(c=>c.joker);
+  const handSize = p.hand.length;
+  const pileSize = p.pile.length;
+
+  // Risk appetite scales with how far into the round we are and how big the bot's own hand still is.
+  const roundProgress = (START_NUM-num+1)/START_NUM;
+  const desperation = handSize > 8 ? 0.2 : (handSize < 3 ? -0.15 : 0);
+
+  let playCard = null;
+  let usedRetrieve = false;
+
+  if(matchIdx>=0){
+    // Has the real card. Usually play it honestly, but occasionally hold it back
+    // to save it for a harder number later, if hand is small and safe.
+    const holdBack = handSize<=2 && Math.random()<0.15;
+    if(!holdBack){ playCard = p.hand.splice(matchIdx,1)[0]; }
+  }
+  if(!playCard && jokerIdx>=0){
+    // Save jokers for numbers unlikely to be in hand, or late-round pressure
+    const jokerChance = 0.25 + roundProgress*0.25;
+    if(Math.random()<jokerChance){ playCard = p.hand.splice(jokerIdx,1)[0]; }
+  }
+  if(!playCard){
+    // Decide: bluff with a random card, retrieve from own pile, or pass outright.
+    const bluffChance = 0.55 + desperation - (pileSize>4 ? 0.1:0); // fewer bluffs once pile is big & risky
+    const retrieveChance = pileSize>=2 ? 0.18 : 0.04;
+    const roll = Math.random();
+    if(roll < retrieveChance && pileSize>0){
+      const card = p.pile.pop();
+      p.hand.push(card);
+      for(let i=p.claimHistory.length-1;i>=0;i--){ if(p.claimHistory[i]!==null){ p.claimHistory.splice(i,1); break; } }
+      usedRetrieve = true;
+      p.claimHistory.push(null);
+      log(`${p.name} quietly pulls a card back off their own pile.`);
+    } else if(roll < retrieveChance+bluffChance && handSize>0){
+      const idx = Math.floor(Math.random()*handSize);
+      playCard = p.hand.splice(idx,1)[0];
+    } else {
+      p.claimHistory.push(null);
+    }
+  }
+  if(playCard){ p.pile.push(playCard); p.justAddedCard = true; p.claimHistory.push(num); playDealSound(); }
+  else if(!usedRetrieve && (!playCard)){ /* already pushed null above if it fell through to pass */ }
+}
+
+function botsActForCurrentNumber(){
+  players.forEach(p=>{
+    if(p.eliminated || p.isBot===false) return;
+    const currentNumber = countdown;
+    if(p.claimHistory.length >= (START_NUM-currentNumber+1)) return;
+    decideBotMove(p, currentNumber);
+  });
+}
+
+// Bots weigh accusing based on trust scores and pile-size heuristics, evaluated during the gap phase
+// (after everyone has acted for the current number) so they're reacting to real info.
+function botsMaybeAccuse(){
+  if(accusationInProgress || roundOver || !roundActive) return;
+  const bots = players.filter(p=>p.isBot && !p.eliminated);
+  let bestAccuser = null, bestTarget = null, bestScore = 0;
+  bots.forEach(bot=>{
+    const targets = players.filter(x=>x.id!==bot.id && !x.eliminated && x.pile.length>0);
+    targets.forEach(t=>{
+      const trust = bot.trust[t.id]!==undefined ? bot.trust[t.id] : 0.3;
+      let suspicion = 1-trust;
+      // extra suspicion if target's pile grew unusually fast relative to acts taken
+      const acts = t.claimHistory.length;
+      const nonPasses = t.claimHistory.filter(c=>c!==null).length;
+      if(acts>0 && nonPasses/acts > 0.85 && acts>=4) suspicion += 0.1;
+      // small natural caution: bots don't accuse constantly
+      const willingness = suspicion - 0.45;
+      if(willingness > bestScore){ bestScore = willingness; bestAccuser = bot; bestTarget = t; }
+    });
+  });
+  if(bestAccuser && bestTarget && Math.random() < clamp01(bestScore*0.9)){
+    setTimeout(()=>{ if(!accusationInProgress && !roundOver && roundActive) executeAccusation(bestAccuser, bestTarget); }, 300+Math.random()*500);
+  }
+}
+
+function humanCanAct(){
+  return roundActive && phase==='place' && !roundOver && !accusationInProgress && !players[0].eliminated;
+}
+
+function humanAlreadyActed(){
+  const p = players[0];
+  const actsThisRound = START_NUM-countdown+1;
+  return p.claimHistory.length >= actsThisRound;
+}
+
+function humanPlayCard(cardIdx){
+  if(!humanCanAct() || humanAlreadyActed()) return;
+  playCardSound();
+  const p = players[0];
+  const currentNumber = countdown;
+  const card = p.hand.splice(cardIdx,1)[0];
+  p.pile.push(card);
+  p.justAddedCard = true;
+  p.claimHistory.push(currentNumber);
+  log(`You slide down ${cardText(card)} claiming "${currentNumber}".`);
+  renderAll();
+}
+
+function humanPass(){
+  if(!humanCanAct() || humanAlreadyActed()) return;
+  playPassSound();
+  const p = players[0];
+  p.claimHistory.push(null);
+  log(`You hold back, no card played for "${countdown}".`);
+  renderAll();
+}
+
+function humanRetrieve(){
+  if(!humanCanAct() || humanAlreadyActed()) return;
+  const p = players[0];
+  if(p.pile.length===0) return;
+  playRetrieveSound();
+  const card = p.pile.pop();
+  p.hand.push(card);
+  p.claimHistory.push(null);
+  log(`You pull ${cardText(card)} back off your own pile instead of taking your turn.`);
+  renderAll();
+}
+
+function updateStopwatchState(){
+  const btn = document.getElementById('stopwatch-center');
+  if(accusationInProgress || roundOver || players[0].eliminated || !roundActive){ btn.classList.add('disabled'); }
+  else { btn.classList.remove('disabled'); }
+}
+
+document.getElementById('stopwatch-center').addEventListener('click', ()=>{
+  if(accusationInProgress || roundOver || !roundActive || players[0].eliminated) return;
+  playConfirmSound();
+  openTargetPicker();
+});
+
+function openTargetPicker(){
+  const wrap = document.getElementById('target-list');
+  wrap.innerHTML = '';
+  players.filter(p=>p.id!==0 && !p.eliminated && p.pile.length>0).forEach(p=>{
+    const d = document.createElement('div');
+    d.className = 'target-opt';
+    d.textContent = p.name.toUpperCase();
+    d.onclick = ()=>{ playAccuseSound(); document.getElementById('target-picker').classList.add('hidden'); executeAccusation(players[0], p); };
+    wrap.appendChild(d);
+  });
+  if(wrap.children.length===0){
+    const d = document.createElement('div'); d.style.color = '#999'; d.textContent = 'No one has placed a card yet.'; wrap.appendChild(d);
+  }
+  document.getElementById('target-picker').classList.remove('hidden');
+}
+document.getElementById('cancel-hammer').addEventListener('click', ()=>{ playCancelSound(); document.getElementById('target-picker').classList.add('hidden'); });
+
+function seatFor(playerId){ const order = ["bottom","top","left","right"]; return order[playerId]; }
+
+function executeAccusation(accuser, target){
+  if(accusationInProgress || roundOver) return;
+  accusationInProgress = true;
+  clearTimeout(phaseTimer);
+  updateStopwatchState();
+
+  log(`${accuser.name} points the finger at ${target.name}.`);
+
+  const accuserPlate = document.querySelector(`#seat-${seatFor(accuser.id)} .name-plate`);
+  const targetSeat = document.getElementById(`seat-${seatFor(target.id)}`);
+  if(accuserPlate) accuserPlate.classList.add('accusing');
+  showPointLabel(accuser, target);
+
+  setTimeout(()=>{
+    if(targetSeat) targetSeat.classList.add('shake');
+    setTimeout(()=>{
+      const topCard = target.pile[target.pile.length-1];
+      const claimIdx = target.claimHistory.filter(c=>c!==null).length - 1;
+      const claimedNumber = getNthNonNullClaim(target, claimIdx);
+      let correct;
+      if(!topCard){ correct = false; }
+      else if(topCard.joker){ correct = true; }
+      else { correct = topCard.rank === claimedNumber; }
+
+      revealTopCard(target, topCard, correct);
+
+      // update bot trust based on outcome
+      players.forEach(bot=>{
+        if(!bot.isBot || bot.id===target.id) return;
+        if(bot.trust[target.id]===undefined) return;
+        bot.trust[target.id] = clamp01(bot.trust[target.id] + (correct? 0.15 : -0.2));
+      });
+
+      setTimeout(()=>{
+        if(accuserPlate) accuserPlate.classList.remove('accusing');
+        if(targetSeat) targetSeat.classList.remove('shake');
+        hidePointLabel(accuser);
+
+        if(correct){
+          playCorrectSound();
+          log(`${target.name}'s card was honest (${cardText(topCard)}). ${accuser.name}'s accusation backfires!`);
+          loseLife(accuser);
+          checkStreakBonus(target);
+        } else {
+          playBluffCaughtSound();
+          log(`${target.name} was bluffing! Revealed ${cardText(topCard)}, needed ${claimedNumber}. Caught!`);
+          loseLife(target);
+        }
+        roundOver = true;
+        roundActive = false;
+        finishRoundAfterDelay();
+      }, 1100);
+    }, 400);
+  }, 500);
+}
+
+function showPointLabel(accuser, target){
+  const seat = document.getElementById(`seat-${seatFor(accuser.id)}`);
+  if(!seat) return;
+  let lbl = seat.querySelector('.point-label');
+  if(!lbl){ lbl = document.createElement('div'); lbl.className = 'point-label'; seat.appendChild(lbl); }
+  lbl.textContent = `-> accuses ${target.name}`;
+  requestAnimationFrame(()=> lbl.classList.add('show'));
+}
+function hidePointLabel(accuser){
+  const seat = document.getElementById(`seat-${seatFor(accuser.id)}`);
+  if(!seat) return;
+  const lbl = seat.querySelector('.point-label');
+  if(lbl) lbl.classList.remove('show');
+}
+
+function getNthNonNullClaim(p, n){
+  let count=-1;
+  for(let i=0;i<p.claimHistory.length;i++){ if(p.claimHistory[i]!==null){ count++; if(count===n) return p.claimHistory[i]; } }
+  return null;
+}
+
+function revealTopCard(target, card, correct){
+  const pile = document.querySelector(`#seat-${seatFor(target.id)} .pressure-point`);
+  if(!pile) return;
+  pile.innerHTML = '';
+  const mc = document.createElement('div');
+  mc.className = `mini-card flip ${cardColor(card)} ${correct? 'reveal-truth':'reveal-bluff'}`;
+  mc.textContent = cardText(card)+(card.suit||'');
+  pile.appendChild(mc);
+}
+
+function resolveTimeout(){
+  roundOver = true;
+  log("Time's up. No one called it.");
+  const active = players.filter(p=>!p.eliminated);
+  let min = Infinity;
+  active.forEach(p=>{ if(p.pile.length<min) min = p.pile.length; });
+  const lowest = active.filter(p=>p.pile.length===min);
+  const victim = lowest[Math.floor(Math.random()*lowest.length)];
+  log(`${victim.name} placed the fewest cards (${victim.pile.length}) and pays the price.`);
+  setTimeout(()=>{
+    loseLife(victim);
+    active.forEach(p=>{ if(p.id!==victim.id) checkStreakBonus(p); });
+    finishRoundAfterDelay();
+  }, 900);
+}
+
+function checkStreakBonus(p){
+  const cards = p.pile;
+  if(cards.length < 3) return;
+  const last3 = cards.slice(-3);
+  if(last3.length===3 && last3.every(c=>!c.joker) && last3[0].rank===last3[1].rank && last3[1].rank===last3[2].rank){
+    p.bonusLifeQueued = true;
+    log(`${p.name} landed three-of-a-kind unnoticed. Bonus life queued!`);
+    return;
+  }
+  if(cards.length>=5){
+    const last5 = cards.slice(-5).filter(c=>!c.joker);
+    const suitsSeen = new Set(last5.map(c=>c.suit));
+    if(last5.length===5 && suitsSeen.size>=4){
+      p.bonusLifeQueued = true;
+      log(`${p.name} ran the suits without a hitch. Bonus life queued!`);
+    }
+  }
+}
+
+function loseLife(p){
+  p.lives--;
+  playLifeLostSound();
+  log(`${p.name} loses a life. (${Math.max(p.lives,0)} remaining)`);
+  if(p.lives<=0){ p.eliminated = true; log(`${p.name} is out of the game.`); playEliminationSound(); }
+  renderAll();
+}
+
+function finishRoundAfterDelay(){
+  setTimeout(()=>{
+    const alive = players.filter(p=>!p.eliminated);
+    if(alive.length<=1){ endGame(alive[0]); return; }
+    const recapLines = players.map(p=> `<span class="recap-row">${p.name}: ${p.eliminated? '<span class="recap-out">OUT</span>' : livesHtml(p)}</span>`);
+    dealHands();
+    runIntermission(recapLines.join(''), ()=>startRound());
+  }, 900);
+}
+
+function renderIntermissionHand(){
+  const wrap = document.getElementById('interm-hand');
+  if(!wrap) return;
+  wrap.innerHTML = '';
+  const p = players && players[0];
+  if(!p || p.eliminated || !p.hand.length) return;
+  const label = document.createElement('div');
+  label.className = 'interm-hand-label pf';
+  label.textContent = 'YOUR HAND';
+  wrap.appendChild(label);
+  const row = document.createElement('div');
+  row.className = 'interm-hand-row';
+  p.hand.forEach(c=>{
+    const cd = document.createElement('div');
+    if(c.joker){
+      cd.className = 'deal-card joker';
+      cd.innerHTML = pixelStar('var(--gold)');
+    } else {
+      cd.className = `deal-card ${cardColor(c)}`;
+      const suitColor = RED_SUITS.includes(c.suit) ? 'var(--red)' : 'var(--black-card)';
+      cd.innerHTML = `<span>${rankLabel(c.rank)}</span>${pixelSuit(c.suit, suitColor, 12)}`;
+    }
+    row.appendChild(cd);
+  });
+  wrap.appendChild(row);
+}
+
+// ---------- Intermission ----------
+function runIntermission(recapText, onDone){
+  const overlay = document.getElementById('intermission');
+  const titleEl = document.getElementById('interm-title');
+  const recapEl = document.getElementById('interm-recap');
+  const countEl = document.getElementById('interm-count');
+  const subEl = document.getElementById('interm-sub');
+
+  titleEl.textContent = recapText ? `Round ${round} Complete` : 'The Deal Begins';
+  recapEl.innerHTML = recapText || '';
+  countEl.textContent = '';
+  subEl.textContent = 'Shuffling the deck...';
+  overlay.classList.add('show');
+  renderIntermissionHand();
+
+  setTimeout(()=>{
+    let n = 5;
+    subEl.textContent = 'Next round in';
+    countEl.textContent = n;
+    const iv = setInterval(()=>{
+      n--;
+      if(n>0){ countEl.textContent = n; }
+      else {
+        clearInterval(iv);
+        overlay.classList.remove('show');
+        setTimeout(onDone, 500);
+      }
+    }, 1700);
+  }, recapText ? 3800 : 1800);
+}
+
+function renderAll(){
+  document.getElementById('roundlabel').textContent = `Round ${round}`;
+  updateStopwatchState();
+  const seatMap = { 0:'seat-bottom', 1:'seat-top', 2:'seat-left', 3:'seat-right' };
+  players.forEach(p=>{
+    const el = document.getElementById(seatMap[p.id]);
+    if(p.id===0){ renderHumanSeat(el,p); } else { renderBotSeat(el,p); }
+  });
+}
+
+// 7x6 pixel-heart bitmap, drawn as crisp <rect> blocks (no anti-aliasing) so it reads as pixel art, not a font glyph.
+const HEART_BITMAP = [
+  "0110110",
+  "1111111",
+  "1111111",
+  "0111110",
+  "0011100",
+  "0001000"
+];
+function pixelHeart(filled){
+  const cell = 2;
+  const color = filled ? 'var(--red)' : '#31335c';
+  let rects = '';
+  HEART_BITMAP.forEach((row,y)=>{
+    for(let x=0;x<row.length;x++){
+      if(row[x]==='1') rects += `<rect x="${x*cell}" y="${y*cell}" width="${cell}" height="${cell}" fill="${color}"/>`;
+    }
+  });
+  return `<svg class="pxheart" viewBox="0 0 14 12" xmlns="http://www.w3.org/2000/svg">${rects}</svg>`;
+}
+const STAR_BITMAP = [
+  "0010100",
+  "0010100",
+  "1111111",
+  "0111110",
+  "0110110",
+  "0100010"
+];
+// Generic tiny-bitmap-to-SVG renderer, shared by suits / icons below.
+// Deliberately hand-drawn, slightly asymmetric bitmaps (not geometric unicode glyphs)
+// so the cards read as pixel-art sprites rather than a font.
+function bitmapSVG(bitmap, color, size){
+  const cell = 2;
+  const cols = bitmap[0].length, rows = bitmap.length;
+  let rects = '';
+  bitmap.forEach((row,y)=>{
+    for(let x=0;x<row.length;x++){
+      if(row[x]==='1') rects += `<rect x="${x*cell}" y="${y*cell}" width="${cell}" height="${cell}" fill="${color||'currentColor'}"/>`;
+    }
+  });
+  const w = cols*cell, h = rows*cell;
+  const dispW = size || w;
+  const dispH = Math.round(dispW * h / w);
+  return `<svg width="${dispW}" height="${dispH}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" style="image-rendering:pixelated;display:block;">${rects}</svg>`;
+}
+
+const SUIT_BITMAPS = {
+  "\u2665": ["0110110","1111111","1111111","0111110","0011100","0001000"], // heart
+  "\u2666": ["0001000","0011100","0111110","1111111","0111110","0011100","0001000"], // diamond
+  "\u2660": ["0001000","0011100","0111110","1111111","1111111","0011100","0011000"], // spade (stem offset for hand-drawn feel)
+  "\u2663": ["0010100","0111010","1111111","0111110","0011100","0111110","0100010"]  // club
+};
+function pixelSuit(suit, color, size){
+  const bmp = SUIT_BITMAPS[suit];
+  if(!bmp) return '';
+  return bitmapSVG(bmp, color, size);
+}
+
+const HOURGLASS_BITMAP = [
+  "01111111111111110",
+  "01111111111111110",
+  "00100000000000100",
+  "00010000000001000",
+  "00001000000010000",
+  "00000100000100000",
+  "00000010001000000",
+  "00000001010000000",
+  "00000001100000000",
+  "00000001110000000",
+  "00000000100000000",
+  "00000000100000000",
+  "00000001110000000",
+  "00000010101000000",
+  "00000100100100000",
+  "00001000000010000",
+  "00010001110001000",
+  "00100011111000100",
+  "00100111111100100",
+  "00101111111110100",
+  "00111111111111100",
+  "01111111111111110",
+  "01111111111111110"
+];
+const GEAR_BITMAP = ["0010100","1010101","0111110","1111111","0111110","1010101","0010100"];
+const CHAT_BITMAP = [
+  "0111111110",
+  "1111111111",
+  "1100110011",
+  "1100110011",
+  "1111111111",
+  "1111111111",
+  "0111111110",
+  "0011000000",
+  "0001000000"
+];
+
+function pixelStar(color){
+  const cell = 2;
+  let rects = '';
+  STAR_BITMAP.forEach((row,y)=>{
+    for(let x=0;x<row.length;x++){
+      if(row[x]==='1') rects += `<rect x="${x*cell}" y="${y*cell}" width="${cell}" height="${cell}" fill="${color}"/>`;
+    }
+  });
+  return `<svg width="20" height="18" viewBox="0 0 14 12" xmlns="http://www.w3.org/2000/svg" style="image-rendering:pixelated;">${rects}</svg>`;
+}
+function livesHtml(p, maxLives){
+  const total = Math.max(maxLives||2, p.lives, 2);
+  let h = '<div class="lives">';
+  for(let i=0;i<total;i++){ h += pixelHeart(i < Math.max(p.lives,0)); }
+  h += '</div>';
+  return h;
+}
+
+function bonusBadgeHtml(p){
+  return p.bonusLifeQueued ? `<span class="bonus-badge">+1 LIFE</span>` : '';
+}
+
+function renderBotSeat(el,p){
+  const dealClass = p.justAddedCard ? 'deal-in' : '';
+  el.innerHTML = `
+    <div class="name-plate ${p.eliminated?'eliminated':''}">
+      ${p.name} ${livesHtml(p)}
+      ${bonusBadgeHtml(p)}
+    </div>
+    <div class="pressure-point">
+      ${p.pile.length? `<div class="mini-card back pc${p.id} ${dealClass}"></div>`:''}
+      <div class="stack-count">${p.pile.length} card${p.pile.length===1?'':'s'}</div>
+    </div>
+  `;
+  p.justAddedCard = false;
+}
+
+function renderHumanSeat(el,p){
+  const dealClass = p.justAddedCard ? 'deal-in' : '';
+  el.innerHTML = `
+    <div class="name-plate ${p.eliminated?'eliminated':''}">
+      ${p.name} ${livesHtml(p)}
+      ${bonusBadgeHtml(p)}
+    </div>
+    <div class="pressure-point">
+      ${p.pile.length? `<div class="mini-card back pc${p.id} ${dealClass}"></div>`:''}
+      <div class="stack-count">${p.pile.length} card${p.pile.length===1?'':'s'}</div>
+    </div>
+  `;
+  p.justAddedCard = false;
+  renderHandBar(p);
+}
+
+function renderHandBar(p){
+  const currentNumber = countdown;
+  const alreadyActed = humanAlreadyActed();
+  const canAct = humanCanAct() && !alreadyActed;
+
+  const handEl = document.getElementById('hand');
+  handEl.innerHTML = '';
+  const labelEl = document.getElementById('hand-label');
+  if(labelEl) labelEl.textContent = `YOUR HAND - ${p.hand.length} CARD${p.hand.length===1?'':'S'}`;
+  p.hand.forEach((c,idx)=>{
+    const cd = document.createElement('div');
+    cd.className = `card ${cardColor(c)} ${canAct? '':'disabled'}`;
+    if(c.joker){
+      cd.innerHTML = `${pixelStar('var(--gold)')}<span class="joker-caption">JOKER</span>`;
+    } else {
+      const suitColor = RED_SUITS.includes(c.suit) ? 'var(--red)' : 'var(--black-card)';
+      const smallSuit = pixelSuit(c.suit, suitColor, 12);
+      const bigSuit = pixelSuit(c.suit, suitColor, 24);
+      cd.innerHTML = `<span class="suit-tl">${rankLabel(c.rank)}${smallSuit}</span><div class="suit-mid">${bigSuit}</div><span class="suit-br">${rankLabel(c.rank)}${smallSuit}</span>`;
+    }
+    cd.title = c.joker ? "Joker - wild, claim anything" : `${rankLabel(c.rank)}${c.suit}`;
+    cd.onclick = ()=> humanPlayCard(idx);
+    if(canAct) cd.addEventListener('mouseenter', playHoverSound);
+    handEl.appendChild(cd);
+  });
+
+  const hint = document.getElementById('action-hint');
+  hint.className = '';
+  if(p.eliminated){ hint.textContent = "YOU'RE OUT"; }
+  else if(!roundActive){ hint.textContent = "GET READY..."; }
+  else if(phase==='gap'){ hint.textContent = "WAIT FOR NEXT NUMBER..."; hint.classList.add('wait'); }
+  else if(alreadyActed){ hint.textContent = "LOCKED IN - WAITING..."; }
+  else { hint.textContent = `PLACE NOW: CLAIM "${currentNumber}", OR PASS`; hint.classList.add('go'); }
+
+  const ctrlWrap = document.getElementById('hand-controls');
+  ctrlWrap.innerHTML = '';
+  if(canAct){
+    const passBtn = document.createElement('div');
+    passBtn.className = 'action-btn';
+    passBtn.textContent = 'PASS';
+    passBtn.onclick = humanPass;
+    ctrlWrap.appendChild(passBtn);
+    if(p.pile.length>0){
+      const retrieveBtn = document.createElement('div');
+      retrieveBtn.className = 'action-btn danger';
+      retrieveBtn.textContent = 'PULL CARD FROM PILE';
+      retrieveBtn.title = 'Take your top pile card back into your hand instead of taking your turn';
+      retrieveBtn.onclick = humanRetrieve;
+      ctrlWrap.appendChild(retrieveBtn);
+    }
+  }
+}
+
+function endGame(winner){
+  playGameOverSound();
+  document.getElementById('end-title').textContent = winner ? `${winner.name.toUpperCase()} WINS` : 'THE TABLE IS EMPTY';
+  document.getElementById('end-sub').textContent = winner
+    ? (winner.id===0 ? "Nerve, and a little luck. You clear the table." : `${winner.name} walks away with everyone's chips.`)
+    : "No one left to deal to.";
+  document.getElementById('end-overlay').classList.remove('hidden');
+}
+
+document.getElementById('btn-start').addEventListener('click', ()=>{ playConfirmSound(); startBgm(); newGame(); });
+document.getElementById('btn-again').addEventListener('click', ()=>{ playConfirmSound(); newGame(); });
+
+// ---------- Settings UI ----------
+const settingsOverlay = document.getElementById('settings-overlay');
+const sfxToggle = document.getElementById('sfx-toggle');
+const volSlider = document.getElementById('vol-slider');
+const volValue = document.getElementById('vol-value');
+
+function syncSettingsUI(){
+  sfxToggle.checked = settings.sfxOn;
+  volSlider.value = Math.round(settings.volume*100);
+  volValue.textContent = `${Math.round(settings.volume*100)}%`;
+}
+
+document.getElementById('btn-settings').addEventListener('click', ()=>{
+  playUIClickSound();
+  syncSettingsUI();
+  settingsOverlay.classList.remove('hidden');
+});
+document.getElementById('btn-settings-close').addEventListener('click', ()=>{
+  playUIClickSound();
+  settingsOverlay.classList.add('hidden');
+});
+sfxToggle.addEventListener('change', ()=>{
+  settings.sfxOn = sfxToggle.checked;
+  saveSettings();
+  if(settings.sfxOn){ playConfirmSound(); bgmAudio.play().catch(()=>{}); }
+  else { bgmAudio.pause(); }
+});
+volSlider.addEventListener('input', ()=>{
+  settings.volume = Number(volSlider.value)/100;
+  volValue.textContent = `${volSlider.value}%`;
+  bgmAudio.volume = settings.volume;
+});
+volSlider.addEventListener('change', ()=>{
+  saveSettings();
+  playConfirmSound();
+});
+
+document.getElementById('stopwatch-center').innerHTML = bitmapSVG(HOURGLASS_BITMAP, 'currentColor', 46);
+document.getElementById('btn-settings').innerHTML = bitmapSVG(GEAR_BITMAP, 'currentColor', 20);
+
+const chatToggleBtn = document.getElementById('chat-toggle-btn');
+chatToggleBtn.insertAdjacentHTML('afterbegin', bitmapSVG(CHAT_BITMAP, 'currentColor', 22));
+const chatLogEl = document.getElementById('log');
+const chatBadgeEl = document.getElementById('chat-badge');
+chatToggleBtn.addEventListener('click', ()=>{
+  chatOpen = !chatOpen;
+  chatLogEl.classList.toggle('open', chatOpen);
+  if(chatOpen){
+    chatUnread = 0;
+    chatBadgeEl.classList.add('hidden');
+  }
+});
+
+players = PLAYER_NAMES.map((n,i)=>({id:i,name:n,isBot:i!==0,lives:2,hand:[],pile:[],eliminated:false,bonusLifeQueued:false,claimHistory:[],trust:{}}));
+round=1; countdown=START_NUM; roundActive=false; roundOver=true; phase='idle';
+renderAll();
+
+})();
+</script>
+</body>
+</html>
