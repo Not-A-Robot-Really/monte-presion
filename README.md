@@ -3,10 +3,17 @@
 A little pixel-art bluffing card game I built for the browser, kind of like "Cheat" / "I Doubt It" but with a countdown timer to keep things tense. It's you against 3 bots (Jimmy, Gus, Juan) and you're all racing a number that counts down from 13 to 1.
  
 This was built in HTML/CSS/Javascript
+
+## About
+
+A simple card game where four enemies all race against the clock to clear their cards and bluff their way out of their situation at-hand, or die trying.
+
+## Why "monte presion"?
+'Monte' refers to any sort of card game. 'Presion' is directly translated to "pressure" in Spanish.
  
 ## Features
  
-- Deals out a full deck to you and 3 bots
+- Deals out a full deck to you and 3 CPU players (you'll get to learn their names soon enough)
 - Counts down from 13, and on every number you get a short window to drop a card and claim it matches (or bluff, or pass)
 - You can accuse someone of lying by clicking the hourglass in the middle of the table
 - Bots aren't dumb, they kind of "watch" how fast your pile grows and get suspicious of you over time
@@ -44,9 +51,9 @@ Each round the countdown number ticks down. For every number you get two phases:
 There's a yellow bar at the top that fills up so you can actually see how much time you've got left in the current phase.
  
 If you think someone's bluffing, click the hourglass in the middle and pick who to accuse. Their top card flips over:
-- if it doesn't match what they claimed, they lose a life
-- if it does match, congrats, you just falsely accused someone and YOU lose a life instead
-If the countdown hits 0 and nobody got caught, whoever placed the fewest cards that round loses a life. So passing too much is risky too.
+- if the card doesn't match what they claimed, they lose a life ♥
+- if the card does match, congrats, you just falsely accused someone and YOU lose a life instead
+If the countdown hits 0 and nobody got caught, whoever placed the fewest cards that round loses a life. This rule makes frequently passing a risky and tactical decision you will have to think through.
  
 Everyone starts with 2 lives. Last person standing wins. Oh also, if you manage to sneak a 3-of-a-kind or a full run of all 4 suits without getting caught, you get a bonus life for next round.
  
@@ -62,7 +69,7 @@ Everyone starts with 2 lives. Last person standing wins. Oh also, if you manage 
  
 The bot AI isn't too complex. Each bot keeps a number (0 or 1) for every other player and adjusts it depending on whether that player's pile is growing faster than expected. When it's time to maybe accuse someone, it rolls a random die weighted by how suspicious it currently is of each player.
  
-Sound effects are all generated on the fly with oscillators (no actual audio files for those), but the background music was made by me (kinda rushed, but it will do) on Flat.
+Sound effects are all generated with oscillators (no actual audio files for those), but the background music was made by me (kinda rushed, but it will do) on Flat.
  
 ## License
  
