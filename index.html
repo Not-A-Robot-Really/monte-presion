@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>COUNTDOWN</title>
+<title>MONTE PRESIÓN</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
@@ -83,7 +83,8 @@
 </div>
 
 <div class="overlay" id="start-overlay">
-  <div class="title-big">COUNTDOWN</div>
+  <div id="title-cardfield"></div>
+  <div class="title-big">MONTE PRESIÓN</div>
   <div class="subtitle">A simple card game where four enemies all race against the clock to clear their cards and bluff their way out of their situation at-hand, or die trying.</div>
   <div class="rules">
     <ul>
@@ -112,12 +113,12 @@
 let settings = { sfxOn:true, volume:0.6 };
 (function loadSettings(){
   try{
-    const saved = JSON.parse(localStorage.getItem('countdown-settings'));
+    const saved = JSON.parse(localStorage.getItem('monte-presion-settings'));
     if(saved && typeof saved==='object'){ settings = Object.assign(settings, saved); }
   } catch(e){ /* ignore */ }
 })();
 function saveSettings(){
-  try{ localStorage.setItem('countdown-settings', JSON.stringify(settings)); } catch(e){ /* ignore */ }
+  try{ localStorage.setItem('monte-presion-settings', JSON.stringify(settings)); } catch(e){ /* ignore */ }
 }
 
 // ---------- Audio: 8-bit SFX + background music (game-theme.mp3) ----------
@@ -938,6 +939,51 @@ function endGame(winner){
     : "No one left to deal to.";
   document.getElementById('end-overlay').classList.remove('hidden');
 }
+
+// ---------- Title screen background: scattered pixel playing cards (no jokers) ----------
+function buildTitleBackground(){
+  const field = document.getElementById('title-cardfield');
+  if(!field) return;
+  field.innerHTML = '';
+
+  const cardCount = 22;
+  for(let i=0;i<cardCount;i++){
+    const suit = SUITS[Math.floor(Math.random()*SUITS.length)];
+    const rank = 1 + Math.floor(Math.random()*13);
+    const el = document.createElement('div');
+    el.className = `card title-card ${RED_SUITS.includes(suit) ? 'red' : 'black'}`;
+    const suitColor = RED_SUITS.includes(suit) ? 'var(--red)' : 'var(--black-card)';
+    const smallSuit = pixelSuit(suit, suitColor, 10);
+    const bigSuit = pixelSuit(suit, suitColor, 20);
+    el.innerHTML = `<span class="suit-tl">${rankLabel(rank)}${smallSuit}</span><div class="suit-mid">${bigSuit}</div><span class="suit-br">${rankLabel(rank)}${smallSuit}</span>`;
+    const top = Math.random()*100;
+    const left = Math.random()*100;
+    const rot = (Math.random()*56 - 28).toFixed(1);
+    const scale = (0.6 + Math.random()*0.55).toFixed(2);
+    el.style.top = `${top}%`;
+    el.style.left = `${left}%`;
+    el.style.transform = `translate(-50%,-50%) rotate(${rot}deg) scale(${scale})`;
+    field.appendChild(el);
+  }
+
+  // sprinkle a handful of pixel hearts/stars in the gaps for extra table-felt decoration
+  const decoCount = 12;
+  for(let i=0;i<decoCount;i++){
+    const wrap = document.createElement('div');
+    wrap.className = 'title-deco';
+    const isHeart = Math.random() < 0.5;
+    wrap.innerHTML = isHeart ? bitmapSVG(HEART_BITMAP, 'var(--red)', 20) : bitmapSVG(STAR_BITMAP, 'var(--gold)', 20);
+    const top = Math.random()*100;
+    const left = Math.random()*100;
+    const rot = (Math.random()*40 - 20).toFixed(1);
+    const scale = (0.8 + Math.random()*0.9).toFixed(2);
+    wrap.style.top = `${top}%`;
+    wrap.style.left = `${left}%`;
+    wrap.style.transform = `translate(-50%,-50%) rotate(${rot}deg) scale(${scale})`;
+    field.appendChild(wrap);
+  }
+}
+buildTitleBackground();
 
 document.getElementById('btn-start').addEventListener('click', ()=>{ playConfirmSound(); startBgm(); newGame(); });
 document.getElementById('btn-again').addEventListener('click', ()=>{ playConfirmSound(); newGame(); });
