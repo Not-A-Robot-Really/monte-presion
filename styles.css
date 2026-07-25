@@ -1,4 +1,4 @@
-  :root{
+:root{
     --bg:#0f1021;
     --bg2:#171833;
     --panel:#1c1e3d;
@@ -315,6 +315,32 @@
   .rules ul{ margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:12px; }
   .rules li{ padding-left:14px; border-left:4px solid var(--gold); }
   .rules b{ color:var(--gold); }
+
+  /* ===== TITLE SCREEN BACKGROUND ===== */
+  /* The title screen swaps the flat dark overlay for a vignette so a field of
+     scattered pixel playing cards (real suits, no jokers) shows through behind
+     the title/rules panel, plus a few pixel hearts/stars sprinkled in for flavor. */
+  #start-overlay{
+    overflow:hidden;
+    background:
+      radial-gradient(ellipse at center, rgba(10,10,20,.45) 0%, rgba(10,10,20,.72) 55%, rgba(10,10,20,.95) 100%);
+  }
+  #title-cardfield{
+    position:absolute; inset:0; z-index:-1;
+    overflow:hidden; pointer-events:none;
+  }
+  .title-card{
+    position:absolute; top:0; left:0;
+    width:70px; height:98px;
+    cursor:default; pointer-events:none;
+    opacity:.34;
+    filter:saturate(.8);
+  }
+  .title-card:hover{ transform-origin:center; } /* keep base .card:hover from firing */
+  .title-deco{
+    position:absolute; top:0; left:0;
+    opacity:.4; pointer-events:none;
+  }
 
   #target-picker{
     position:fixed; inset:0; z-index:90; background:rgba(10,10,20,.6);
