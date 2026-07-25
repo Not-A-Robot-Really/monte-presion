@@ -32,7 +32,7 @@ LICENSE
  
 ## Run the game
  
-Honestly, you can probably just double click `countdown.html` and it'll work. However, if the music/sound is acting weird, try running a quick local server instead:
+Ngl, you can probably just double click `countdown.html` and it'll work. However, if the music/sound is acting weird, try running a quick local server instead:
  
 ```bash
 python3 -m http.server 8000
@@ -67,7 +67,7 @@ Everyone starts with 2 lives. Last person standing wins. Oh also, if you manage 
 - Gear icon opens settings
 ## A few implementation notes
  
-The bot AI isn't too complex. Each bot keeps a number (0 or 1) for every other player and adjusts it depending on whether that player's pile is growing faster than expected. When it's time to maybe accuse someone, it rolls a random die weighted by how suspicious it currently is of each player.
+The bot algorithm isn't too complex. Each bot keeps a number (0 or 1) for every other player and adjusts it depending on whether that player's pile is growing faster than expected. When it's time to maybe accuse someone, it rolls a random die weighted by how suspicious it currently is of each player.
  
 Sound effects are all generated with oscillators (no actual audio files for those), but the background music was made by me (kinda rushed, but it will do) on Flat.
  
