@@ -948,8 +948,19 @@ function buildTitleBackground(){
   if(!field) return;
   field.innerHTML = '';
 
-  const cardCount = 22;
+  // Lay cards out on a loose grid (with randomized jitter inside each cell) instead
+  // of picking fully-random top/left percentages for every card. Pure random
+  // placement was prone to clustering several cards on top of one another in the
+  // same spot - this keeps the scattered-table look while guaranteeing even,
+  // non-overlapping coverage across the screen.
+  const cols = 6, rows = 5;
+  const cellW = 100/cols, cellH = 100/rows;
+  const cellCoords = [];
+  for(let r=0;r<rows;r++){ for(let c=0;c<cols;c++){ cellCoords.push({r,c}); } }
+  shuffle(cellCoords);
+  const cardCount = Math.min(18, cellCoords.length);
   for(let i=0;i<cardCount;i++){
+    const {r,c} = cellCoords[i];
     const suit = SUITS[Math.floor(Math.random()*SUITS.length)];
     const rank = 1 + Math.floor(Math.random()*13);
     const el = document.createElement('div');
@@ -958,10 +969,13 @@ function buildTitleBackground(){
     const smallSuit = pixelSuit(suit, suitColor, 10);
     const bigSuit = pixelSuit(suit, suitColor, 20);
     el.innerHTML = `<span class="suit-tl">${rankLabel(rank)}${smallSuit}</span><div class="suit-mid">${bigSuit}</div><span class="suit-br">${rankLabel(rank)}${smallSuit}</span>`;
-    const top = Math.random()*100;
-    const left = Math.random()*100;
-    const rot = (Math.random()*56 - 28).toFixed(1);
-    const scale = (0.6 + Math.random()*0.55).toFixed(2);
+    // center of this grid cell, plus a little jitter that stays inside the cell
+    const jitterX = (Math.random()-0.5) * cellW * 0.5;
+    const jitterY = (Math.random()-0.5) * cellH * 0.5;
+    const top = (r+0.5)*cellH + jitterY;
+    const left = (c+0.5)*cellW + jitterX;
+    const rot = (Math.random()*30 - 15).toFixed(1);
+    const scale = (0.55 + Math.random()*0.3).toFixed(2);
     el.style.top = `${top}%`;
     el.style.left = `${left}%`;
     el.style.transform = `translate(-50%,-50%) rotate(${rot}deg) scale(${scale})`;
@@ -1081,9 +1095,11 @@ chatToggleBtn.addEventListener('click', ()=>{
   }
 });
 
-players = PLAYER_NAMES.map((n,i)=>({id:i,name:n,isBot:i!==0,lives:2,hand:[],pile:[],eliminated:false,bonusLifeQueued:false,claimHistory:[],trust:{}}));
-round=1; countdown=START_NUM; roundActive=false; roundOver=true; phase='idle';
-renderAll();
+// NOTE: we deliberately do NOT pre-build player state or call renderAll() here.
+// Doing that on page load used to populate the seat name-plates (name + hearts,
+// e.g. "Gus <3<3") and pile/hand HUD before a game had even started, which is
+// GAME-PAGE content and has no business existing while the title screen is up.
+// newGame() (fired by the SIT DOWN button) now sets everything up from scratch.
 
 })();
 </script>
