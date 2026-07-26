@@ -10,6 +10,11 @@ A simple card game where four enemies all race against the clock to clear their 
 
 ## Why "monte presion"?
 'Monte' refers to any sort of card game. 'Presion' is directly translated to "pressure" in Spanish.
+
+## Inspiration
+I decided to make this game due to 2 reasons. First, playing games with a deck of cards, in my opinion, is one of the most underrated modern family board game; none of that monopoly or risk! I wanted to showcase some of that unique and fun aspect of card games in this.
+
+Second, I wanted something I didn't have to make much art for... (If I made an RPG, this would take weeks to draw)
  
 ## Features
  
