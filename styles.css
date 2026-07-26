@@ -97,7 +97,9 @@
   body.pre-game #btn-settings,
   body.pre-game #chat-toggle-btn,
   body.pre-game #log{
-    display:none;
+    display:none !important;
+    visibility:hidden !important;
+    pointer-events:none !important;
   }
 
   /* ===== STAGE ===== */
