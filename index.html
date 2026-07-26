@@ -7,7 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body class="pre-game">
 <div id="scanlines"></div>
 <audio id="bgm-audio" src="game-theme.mp3" loop preload="auto"></audio>
 <div id="chat-toggle-btn" title="Toggle messages">
@@ -84,7 +84,9 @@
 
 <div class="overlay" id="start-overlay">
   <div id="title-cardfield"></div>
+  <div id="title-cardfield-fg"></div>
   <div class="title-big">MONTE PRESIÓN</div>
+  <div class="title-tagline">A BLUFFING CARD GAME</div>
   <div class="subtitle">A simple card game where four enemies all race against the clock to clear their cards and bluff their way out of their situation at-hand, or die trying.</div>
   <div class="rules">
     <ul>
@@ -985,7 +987,45 @@ function buildTitleBackground(){
 }
 buildTitleBackground();
 
-document.getElementById('btn-start').addEventListener('click', ()=>{ playConfirmSound(); startBgm(); newGame(); });
+// A handful of bigger cards planted at fixed spots around the edges of the
+// screen (not randomly scattered like the background field) so they read as
+// cards someone actually dealt onto the table rather than a generated pattern.
+function buildTitleForeground(){
+  const field = document.getElementById('title-cardfield-fg');
+  if(!field) return;
+  field.innerHTML = '';
+
+  const spots = [
+    { corner:'bottom-left',  x:-26, y:34,  rot:-16 },
+    { corner:'bottom-left',  x:64,  y:86,  rot:9   },
+    { corner:'bottom-right', x:-22, y:44,  rot:15  },
+    { corner:'bottom-right', x:70,  y:96,  rot:-10 },
+    { corner:'top-left',     x:-30, y:-34, rot:21  },
+    { corner:'top-right',    x:-18, y:-28, rot:-13 }
+  ];
+
+  spots.forEach(spot=>{
+    const suit = SUITS[Math.floor(Math.random()*SUITS.length)];
+    const rank = 1 + Math.floor(Math.random()*13);
+    const el = document.createElement('div');
+    el.className = `card title-card-fg ${RED_SUITS.includes(suit) ? 'red' : 'black'}`;
+    const suitColor = RED_SUITS.includes(suit) ? 'var(--red)' : 'var(--black-card)';
+    const smallSuit = pixelSuit(suit, suitColor, 14);
+    const bigSuit = pixelSuit(suit, suitColor, 30);
+    el.innerHTML = `<span class="suit-tl">${rankLabel(rank)}${smallSuit}</span><div class="suit-mid">${bigSuit}</div><span class="suit-br">${rankLabel(rank)}${smallSuit}</span>`;
+
+    if(spot.corner==='bottom-left'){ el.style.left = `${spot.x}px`; el.style.bottom = `${spot.y}px`; }
+    else if(spot.corner==='bottom-right'){ el.style.right = `${spot.x}px`; el.style.bottom = `${spot.y}px`; }
+    else if(spot.corner==='top-left'){ el.style.left = `${spot.x}px`; el.style.top = `${spot.y}px`; }
+    else { el.style.right = `${spot.x}px`; el.style.top = `${spot.y}px`; }
+    el.style.transform = `rotate(${spot.rot}deg)`;
+
+    field.appendChild(el);
+  });
+}
+buildTitleForeground();
+
+document.getElementById('btn-start').addEventListener('click', ()=>{ document.body.classList.remove('pre-game'); playConfirmSound(); startBgm(); newGame(); });
 document.getElementById('btn-again').addEventListener('click', ()=>{ playConfirmSound(); newGame(); });
 
 // ---------- Settings UI ----------
